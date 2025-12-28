@@ -1,0 +1,163 @@
+# Silica Protocol - Cross-Repository Dependency Sync
+# Triggered when ops/config/dependencies.toml changes
+
+name: Sync Dependencies
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'config/dependencies.toml'
+      - 'config/versions.toml'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Dry run (preview changes only)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  DRY_RUN: ${{ github.event.inputs.dry-run || 'true' }}
+
+jobs:
+  sync-rust-repos:
+    name: Sync Rust Repositories
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        repo:
+          - protocol
+          - protocol-core
+          - api
+          - miner
+          - oracle
+          - contracts
+          - sdk-rust
+
+    steps:
+      - name: Checkout ops
+        uses: actions/checkout@v4
+        with:
+          path: ops
+
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          repository: Silica-Protocol/${{ matrix.repo }}
+          path: target
+          token: ${{ secrets.REPO_ADMIN_TOKEN }}
+
+      - name: Install toml-cli
+        run: cargo install toml-cli
+
+      - name: Sync dependencies
+        run: |
+          cd ops
+          ./scripts/sync-single-repo.sh ../target ${{ matrix.repo }}
+
+      - name: Show diff
+        run: |
+          cd target
+          git diff
+
+      - name: Create PR
+        if: env.DRY_RUN == 'false'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          path: target
+          token: ${{ secrets.REPO_ADMIN_TOKEN }}
+          commit-message: 'chore(deps): sync dependency versions from ops'
+          title: 'chore(deps): sync dependency versions'
+          body: |
+            Automated dependency sync from `ops/config/dependencies.toml`.
+            
+            This PR was automatically created by the ops sync workflow.
+            
+            **Changes:**
+            - Updated workspace dependency versions
+            - Applied security-critical version locks
+            
+            **Verification:**
+            - [ ] CI passes
+            - [ ] Cargo.lock regenerated cleanly
+          branch: deps/auto-sync-${{ github.run_number }}
+          labels: dependencies, automated
+          delete-branch: true
+
+  sync-node-repos:
+    name: Sync Node.js Repositories
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        repo:
+          - sdk-typescript
+          - explorer
+
+    steps:
+      - name: Checkout ops
+        uses: actions/checkout@v4
+        with:
+          path: ops
+
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          repository: Silica-Protocol/${{ matrix.repo }}
+          path: target
+          token: ${{ secrets.REPO_ADMIN_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Sync TypeScript version
+        run: |
+          cd ops
+          VERSION=$(grep 'typescript = "' config/dependencies.toml | sed 's/.*"\([^"]*\)".*/\1/')
+          cd ../target
+          if [ -f "package.json" ]; then
+            npm pkg set devDependencies.typescript="$VERSION"
+          fi
+
+      - name: Show diff
+        run: |
+          cd target
+          git diff
+
+      - name: Create PR
+        if: env.DRY_RUN == 'false'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          path: target
+          token: ${{ secrets.REPO_ADMIN_TOKEN }}
+          commit-message: 'chore(deps): sync dependency versions from ops'
+          title: 'chore(deps): sync dependency versions'
+          body: |
+            Automated dependency sync from `ops/config/dependencies.toml`.
+          branch: deps/auto-sync-${{ github.run_number }}
+          labels: dependencies, automated
+          delete-branch: true
+
+  summary:
+    name: Sync Summary
+    needs: [sync-rust-repos, sync-node-repos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          echo "## Dependency Sync Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ env.DRY_RUN }}" == "true" ]; then
+            echo "**Mode:** Dry run (no PRs created)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Mode:** Live (PRs created)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check individual job logs for details." >> $GITHUB_STEP_SUMMARY

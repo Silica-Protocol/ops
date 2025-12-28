@@ -1,0 +1,182 @@
+# Silica Protocol - Repository Registry
+# Metadata for all repositories in the organization
+
+[organization]
+name = "Silica-Protocol"
+github_url = "https://github.com/Silica-Protocol"
+
+# =============================================================================
+# CORE REPOSITORIES
+# =============================================================================
+
+[repos.protocol]
+path = "protocol"
+type = "binary"
+language = "rust"
+publish_to = []  # Not published, binary only
+depends_on = ["protocol-core", "halo2"]
+description = "Main Silica v2 blockchain node"
+
+[repos.protocol-core]
+path = "protocol-core"
+type = "library"
+language = "rust"
+package_name = "silica-models"
+publish_to = ["crates.io"]
+depends_on = []
+description = "Core data models and types"
+
+[repos.api]
+path = "api"
+type = "service"
+language = "rust"
+depends_on = ["protocol-core"]
+description = "REST/RPC API server"
+
+[repos.miner]
+path = "miner"
+type = "binary"
+language = "rust"
+depends_on = ["protocol-core"]
+description = "Mining node implementation"
+
+[repos.oracle]
+path = "oracle"
+type = "service"
+language = "rust"
+depends_on = ["protocol-core"]
+description = "Price and data oracle"
+
+[repos.contracts]
+path = "contracts"
+type = "library"
+language = "rust"
+package_name = "chert-contracts"
+publish_to = ["crates.io"]
+depends_on = ["protocol-core"]
+description = "Smart contract SDK"
+
+[repos.protocol-contracts]
+path = "protocol-contracts"
+type = "contracts"
+language = "rust"
+depends_on = ["contracts"]
+description = "Protocol-level smart contracts"
+
+# =============================================================================
+# SDK REPOSITORIES
+# =============================================================================
+
+[repos.sdk-rust]
+path = "sdk-rust"
+type = "sdk"
+language = "rust"
+package_name = "chert-sdk"
+publish_to = ["crates.io"]
+depends_on = ["protocol-core"]
+description = "Official Rust SDK"
+
+[repos.sdk-typescript]
+path = "sdk-typescript"
+type = "sdk"
+language = "typescript"
+package_name = "@silica-protocol/sdk"
+publish_to = ["npm"]
+depends_on = []
+description = "Official TypeScript SDK"
+
+[repos.sdk-python]
+path = "sdk-python"
+type = "sdk"
+language = "python"
+package_name = "chert-sdk"
+publish_to = ["pypi"]
+depends_on = []
+description = "Official Python SDK"
+
+[repos.sdk-go]
+path = "sdk-go"
+type = "sdk"
+language = "go"
+module_path = "github.com/Silica-Protocol/sdk-go"
+publish_to = ["go-modules"]
+depends_on = []
+description = "Official Go SDK"
+
+[repos.sdk-csharp]
+path = "sdk-csharp"
+type = "sdk"
+language = "csharp"
+package_name = "Silica.Sdk"
+publish_to = ["nuget"]
+depends_on = []
+description = "Official C# SDK"
+
+# =============================================================================
+# FRONTEND REPOSITORIES
+# =============================================================================
+
+[repos.wallet]
+path = "wallet"
+type = "application"
+language = "rust+typescript"  # Tauri
+depends_on = ["sdk-rust", "sdk-typescript"]
+description = "Desktop wallet application"
+
+[repos.explorer]
+path = "explorer"
+type = "application"
+language = "typescript"  # Angular
+depends_on = ["sdk-typescript"]
+description = "Block explorer"
+
+[repos.site-chert]
+path = "site-chert"
+type = "website"
+language = "static"
+depends_on = []
+description = "Chert marketing site"
+
+[repos.site-silica]
+path = "site-silica"
+type = "website"
+language = "static"
+depends_on = []
+description = "Silica documentation"
+
+# =============================================================================
+# INFRASTRUCTURE REPOSITORIES
+# =============================================================================
+
+[repos.infrastructure]
+path = "infrastructure"
+type = "infrastructure"
+language = "hcl+yaml"
+depends_on = []
+description = "IaC, Ansible, Docker, K8s"
+
+[repos.ops]
+path = "ops"
+type = "automation"
+language = "yaml+shell"
+depends_on = []
+description = "CI/CD and cross-repo management"
+
+[repos.".github"]
+path = ".github"
+type = "organization"
+language = "yaml+markdown"
+depends_on = []
+description = "Organization-wide settings"
+
+# =============================================================================
+# EXTERNAL FORKS
+# =============================================================================
+
+[repos.halo2]
+path = "halo2"
+type = "fork"
+language = "rust"
+upstream = "zcash/halo2"
+branch = "poseidon2"
+description = "ZK proving system with Poseidon2"

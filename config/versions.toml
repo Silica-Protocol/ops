@@ -1,0 +1,46 @@
+# Silica Protocol - Master Version Registry
+# This file is the single source of truth for all version numbers across repositories.
+# Updated by: release automation + manual PR
+# Format: TOML with semantic versioning
+
+[protocol]
+# Core protocol version - ALL repos must align to this for compatibility
+version = "0.1.0"
+min_compatible = "0.1.0"
+
+[packages]
+# Rust packages published to crates.io
+silica-models = "0.1.0"           # protocol-core
+silica = "0.1.0"                  # protocol main binary
+chert-sdk = "0.1.0"               # sdk-rust
+chert-contracts = "0.1.0"         # contracts
+chert-api = "0.1.0"               # api
+
+[sdks]
+# SDK versions - should be kept in sync for UX consistency
+rust = "0.1.0"
+typescript = "0.1.0"
+python = "0.1.0"
+go = "0.1.0"
+csharp = "0.1.0"
+
+[apps]
+# Application versions
+wallet = "0.1.0"
+miner = "0.1.0"
+explorer = "0.1.0"
+
+[sites]
+site-chert = "0.1.0"
+site-silica = "0.1.0"
+
+# =============================================================================
+# Release Metadata
+# =============================================================================
+[release]
+channel = "dev"                   # dev | alpha | beta | stable
+codename = "genesis"
+release_date = ""                 # Set by automation on release
+
+# Git tags follow: v{version}-{channel} e.g., v0.1.0-alpha
+# SDK packages follow: {version}-{channel} e.g., 0.1.0-alpha.1

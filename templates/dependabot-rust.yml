@@ -1,0 +1,62 @@
+version: 2
+updates:
+  # Rust dependencies
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "rust"
+    groups:
+      # Group all crypto packages together for coordinated review
+      rust-cryptography:
+        patterns:
+          - "pqcrypto-*"
+          - "ed25519-*"
+          - "sha2"
+          - "sha3"
+          - "blake3"
+          - "ring"
+          - "argon2"
+          - "subtle"
+          - "zeroize"
+          - "rand"
+          - "rand_core"
+      # Group async runtime
+      rust-async:
+        patterns:
+          - "tokio"
+          - "futures"
+          - "async-*"
+      # Group networking
+      rust-networking:
+        patterns:
+          - "libp2p*"
+          - "quinn"
+          - "rustls"
+          - "reqwest"
+    ignore:
+      # Ignore pre-release versions
+      - dependency-name: "*"
+        update-types: ["version-update:semver-prerelease"]
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"
+
+  # Docker dependencies (if applicable)
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "docker"

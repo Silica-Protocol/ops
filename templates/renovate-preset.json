@@ -1,0 +1,119 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Silica Protocol shared Renovate configuration",
+  "extends": [
+    "config:base",
+    "schedule:earlyMondays",
+    ":dependencyDashboard"
+  ],
+  "labels": ["dependencies"],
+  "prHourlyLimit": 3,
+  "prConcurrentLimit": 10,
+  "stabilityDays": 3,
+  "packageRules": [
+    {
+      "description": "Cryptography packages - manual review required",
+      "matchPackagePatterns": [
+        "^pqcrypto-",
+        "^ed25519-",
+        "^sha2$",
+        "^sha3$",
+        "^blake3$",
+        "^ring$",
+        "^argon2$",
+        "^subtle$",
+        "^zeroize$",
+        "^rand$",
+        "^rand_core$"
+      ],
+      "automerge": false,
+      "labels": ["dependencies", "security", "needs-review"],
+      "groupName": "cryptography",
+      "schedule": ["before 7am on monday"]
+    },
+    {
+      "description": "Serialization packages - coordinate across repos",
+      "matchPackagePatterns": [
+        "^serde$",
+        "^serde_json$",
+        "^postcard$"
+      ],
+      "automerge": false,
+      "labels": ["dependencies", "abi-breaking"],
+      "groupName": "serialization"
+    },
+    {
+      "description": "Testing packages - automerge after CI",
+      "matchPackagePatterns": [
+        "^test-",
+        "^criterion$",
+        "^proptest$",
+        "^jest$",
+        "^pytest$"
+      ],
+      "automerge": true,
+      "groupName": "testing"
+    },
+    {
+      "description": "Development tools - automerge",
+      "matchPackagePatterns": [
+        "^eslint",
+        "^prettier$",
+        "^clippy$",
+        "^typescript$"
+      ],
+      "automerge": true,
+      "groupName": "dev-tools"
+    },
+    {
+      "description": "Minor and patch updates - automerge after CI",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "excludePackagePatterns": [
+        "^pqcrypto-",
+        "^ed25519-",
+        "^serde"
+      ]
+    },
+    {
+      "description": "Major updates - never automerge",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "breaking-change"]
+    },
+    {
+      "description": "Pin Rust dependencies in lockfile",
+      "matchManagers": ["cargo"],
+      "rangeStrategy": "pin"
+    },
+    {
+      "description": "Group all non-major updates",
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "all-minor-patch",
+      "excludePackagePatterns": ["^pqcrypto-", "^ed25519-", "^serde"]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "urgent"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"]
+  },
+  "customManagers": [
+    {
+      "description": "Update Rust toolchain version",
+      "customType": "regex",
+      "fileMatch": ["rust-toolchain.toml$"],
+      "matchStrings": [
+        "channel\\s*=\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "depNameTemplate": "rust",
+      "datasourceTemplate": "github-releases",
+      "lookupNameTemplate": "rust-lang/rust"
+    }
+  ]
+}

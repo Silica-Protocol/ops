@@ -1,0 +1,185 @@
+# Silica Protocol - Reusable Rust CI Workflow
+# Call from individual repos with: uses: Silica-Protocol/ops/.github/workflows/rust-ci.yml@main
+
+name: Rust CI
+
+on:
+  workflow_call:
+    inputs:
+      rust-version:
+        description: 'Rust toolchain version'
+        default: 'stable'
+        type: string
+      msrv:
+        description: 'Minimum Supported Rust Version'
+        default: ''
+        type: string
+      run-security-audit:
+        description: 'Run cargo-audit'
+        default: true
+        type: boolean
+      run-deny-check:
+        description: 'Run cargo-deny'
+        default: true
+        type: boolean
+      run-benchmarks:
+        description: 'Run benchmarks'
+        default: false
+        type: boolean
+      features:
+        description: 'Features to enable'
+        default: ''
+        type: string
+      extra-clippy-args:
+        description: 'Additional clippy arguments'
+        default: ''
+        type: string
+    secrets:
+      CRATES_IO_TOKEN:
+        required: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fmt:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.rust-version }}
+          components: rustfmt
+      
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.rust-version }}
+          components: clippy
+      
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Clippy (all targets)
+        run: |
+          FEATURES="${{ inputs.features }}"
+          EXTRA="${{ inputs.extra-clippy-args }}"
+          if [ -n "$FEATURES" ]; then
+            cargo clippy --all-targets --features "$FEATURES" -- -D warnings $EXTRA
+          else
+            cargo clippy --all-targets --all-features -- -D warnings $EXTRA
+          fi
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.rust-version }}
+      
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Run tests
+        run: |
+          FEATURES="${{ inputs.features }}"
+          if [ -n "$FEATURES" ]; then
+            cargo test --workspace --features "$FEATURES"
+          else
+            cargo test --workspace --all-features
+          fi
+        env:
+          RUST_BACKTRACE: 1
+
+  msrv:
+    name: MSRV Check
+    if: inputs.msrv != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.msrv }}
+      
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Check MSRV
+        run: cargo check --all-features
+
+  security:
+    name: Security Audit
+    if: inputs.run-security-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      
+      - name: Run audit
+        run: cargo audit --deny warnings
+
+  deny:
+    name: Cargo Deny
+    if: inputs.run-deny-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install cargo-deny
+        run: cargo install cargo-deny
+      
+      - name: Check deny.toml exists
+        id: check-deny
+        run: |
+          if [ -f "deny.toml" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Run deny
+        if: steps.check-deny.outputs.exists == 'true'
+        run: cargo deny check
+
+  bench:
+    name: Benchmarks
+    if: inputs.run-benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Run benchmarks
+        run: cargo bench --no-run

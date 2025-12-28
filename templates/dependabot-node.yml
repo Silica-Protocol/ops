@@ -1,0 +1,49 @@
+version: 2
+updates:
+  # NPM dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    groups:
+      # TypeScript and build tools
+      typescript-tooling:
+        patterns:
+          - "typescript"
+          - "@types/*"
+          - "tslib"
+          - "ts-node"
+      # Testing
+      testing:
+        patterns:
+          - "jest"
+          - "@jest/*"
+          - "ts-jest"
+          - "@testing-library/*"
+      # Linting
+      linting:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "prettier"
+          - "@typescript-eslint/*"
+      # Crypto libraries
+      crypto:
+        patterns:
+          - "@noble/*"
+          - "tweetnacl"
+    versioning-strategy: increase
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"

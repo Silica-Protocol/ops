@@ -1,0 +1,195 @@
+# Silica Protocol - Reusable Node.js CI Workflow
+# Call from individual repos with: uses: Silica-Protocol/ops/.github/workflows/node-ci.yml@main
+
+name: Node.js CI
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version'
+        default: '18'
+        type: string
+      package-manager:
+        description: 'Package manager (npm, pnpm, yarn)'
+        default: 'npm'
+        type: string
+      working-directory:
+        description: 'Working directory'
+        default: '.'
+        type: string
+      run-build:
+        description: 'Run build step'
+        default: true
+        type: boolean
+      run-lint:
+        description: 'Run lint step'
+        default: true
+        type: boolean
+      run-type-check:
+        description: 'Run TypeScript type check'
+        default: true
+        type: boolean
+    secrets:
+      NPM_TOKEN:
+        required: false
+
+jobs:
+  install:
+    name: Install Dependencies
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+      
+      - name: Install (npm)
+        if: inputs.package-manager == 'npm'
+        run: npm ci
+      
+      - name: Install (pnpm)
+        if: inputs.package-manager == 'pnpm'
+        run: |
+          npm install -g pnpm
+          pnpm install --frozen-lockfile
+      
+      - name: Install (yarn)
+        if: inputs.package-manager == 'yarn'
+        run: yarn install --frozen-lockfile
+      
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.working-directory }}/node_modules
+          key: ${{ runner.os }}-node-${{ inputs.node-version }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
+
+  lint:
+    name: Lint
+    needs: install
+    if: inputs.run-lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.working-directory }}/node_modules
+          key: ${{ runner.os }}-node-${{ inputs.node-version }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
+      
+      - name: Run lint
+        run: npm run lint
+
+  type-check:
+    name: Type Check
+    needs: install
+    if: inputs.run-type-check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.working-directory }}/node_modules
+          key: ${{ runner.os }}-node-${{ inputs.node-version }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
+      
+      - name: Run type check
+        run: npm run type-check || npx tsc --noEmit
+
+  test:
+    name: Tests
+    needs: install
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.working-directory }}/node_modules
+          key: ${{ runner.os }}-node-${{ inputs.node-version }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
+      
+      - name: Run tests
+        run: npm test
+
+  build:
+    name: Build
+    needs: install
+    if: inputs.run-build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.working-directory }}/node_modules
+          key: ${{ runner.os }}-node-${{ inputs.node-version }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
+      
+      - name: Run build
+        run: npm run build
+
+  security:
+    name: Security Audit
+    needs: install
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      
+      - name: Run audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true  # Don't fail on audit, just report
