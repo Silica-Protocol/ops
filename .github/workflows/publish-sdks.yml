@@ -1,0 +1,334 @@
+name: Publish SDKs
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish_dry_run:
+        description: 'Dry run (test without publishing)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # TypeScript SDK Build & Publish
+  typescript:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./sdk/typescript
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build package
+        run: npm run build
+
+      - name: Publish to npm (dry run)
+        if: github.event.inputs.publish_dry_run == 'true' || github.event_name == 'push'
+        run: npm publish --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm
+        if: github.event.inputs.publish_dry_run == 'false' && github.event_name == 'push'
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Rust SDK Build & Publish
+  rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./sdk/rust
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Publish to crates.io (dry run)
+        if: github.event.inputs.publish_dry_run == 'true' || github.event_name == 'push'
+        run: cargo publish --dry-run
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+      - name: Publish to crates.io
+        if: github.event.inputs.publish_dry_run == 'false' && github.event_name == 'push'
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+  # Go SDK Build & Test (Go modules don't need publishing to a central registry)
+  go:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./sdk/go
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Check formatting
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted properly:"
+            gofmt -s -l .
+            exit 1
+          fi
+
+      - name: Build
+        run: go build ./...
+
+      - name: Create GitHub release asset
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          # Create cross-platform binaries
+          GOOS=linux GOARCH=amd64 go build -o chert-sdk-linux-amd64 ./cmd/...
+          GOOS=darwin GOARCH=amd64 go build -o chert-sdk-darwin-amd64 ./cmd/...
+          GOOS=windows GOARCH=amd64 go build -o chert-sdk-windows-amd64.exe ./cmd/...
+
+          # Archive binaries
+          tar -czf chert-sdk-linux-amd64.tar.gz chert-sdk-linux-amd64
+          tar -czf chert-sdk-darwin-amd64.tar.gz chert-sdk-darwin-amd64
+          zip chert-sdk-windows-amd64.zip chert-sdk-windows-amd64.exe
+
+      - name: Upload release assets
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            sdk/go/chert-sdk-*.tar.gz
+            sdk/go/chert-sdk-*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Python SDK Build & Publish
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./sdk/python
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest --cov=chert_sdk --cov-report=xml
+
+      - name: Check formatting
+        run: |
+          black --check chert_sdk/
+          isort --check-only chert_sdk/
+
+      - name: Type checking
+        run: mypy chert_sdk/
+
+      - name: Build package
+        run: python setup.py sdist bdist_wheel
+
+      - name: Publish to PyPI (dry run)
+        if: github.event.inputs.publish_dry_run == 'true' || github.event_name == 'push'
+        run: |
+          pip install twine
+          twine check dist/*
+          twine upload --repository testpypi dist/* --verbose
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+
+      - name: Publish to PyPI
+        if: github.event.inputs.publish_dry_run == 'false' && github.event_name == 'push'
+        run: |
+          pip install twine
+          twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+
+  # C# SDK Build & Publish
+  csharp:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./sdk/csharp
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '6.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Pack
+        run: dotnet pack --configuration Release --no-build --output nupkgs
+
+      - name: Publish to NuGet (dry run)
+        if: github.event.inputs.publish_dry_run == 'true' || github.event_name == 'push'
+        run: |
+          dotnet nuget push "nupkgs/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+      - name: Publish to NuGet
+        if: github.event.inputs.publish_dry_run == 'false' && github.event_name == 'push'
+        run: |
+          dotnet nuget push "nupkgs/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+  # Create GitHub Release
+  release:
+    needs: [typescript, rust, go, python, csharp]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Update documentation
+  docs:
+    needs: [typescript, rust, go, python, csharp]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js for docs
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Update SDK documentation
+        run: |
+          # Update version numbers in README files
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Updating documentation for version $VERSION"
+
+          # Update main SDK README
+          sed -i "s/## Version .*/## Version $VERSION/" sdk/README.md
+
+          # Update individual SDK READMEs
+          find sdk -name "README.md" -exec sed -i "s/version-.*\"/version-$VERSION\"/" {} \;
+
+      - name: Commit documentation updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git commit -m "Update documentation for v${GITHUB_REF#refs/tags/v}" || echo "No changes to commit"
+
+      - name: Push documentation updates
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main

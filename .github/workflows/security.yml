@@ -1,0 +1,127 @@
+name: Security Validation
+on: 
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+        override: true
+        
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        
+    - name: Install security tools
+      run: |
+        cargo install cargo-audit cargo-deny cargo-tarpaulin
+        
+    - name: Run cargo-audit
+      run: cargo audit --deny-warnings
+      
+    - name: Run cargo-deny
+      run: cargo deny check
+      
+    - name: Run cargo fmt check
+      run: cargo fmt --all -- --check
+      
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+      
+    - name: Run security tests
+      run: cargo test security_tests --all-features
+      
+    - name: Generate coverage report
+      run: cargo tarpaulin --out Html --output-dir coverage/ --exclude-files='*/tests/*'
+      
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: coverage/tarpaulin-report.html
+        flags: security
+
+  typescript-security:
+    name: TypeScript SDK Security
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: sdk/typescript/package-lock.json
+        
+    - name: Install dependencies
+      working-directory: ./sdk/typescript
+      run: npm ci
+      
+    - name: Run security audit
+      working-directory: ./sdk/typescript
+      run: npm audit --audit-level moderate
+      
+    - name: Run linting
+      working-directory: ./sdk/typescript
+      run: npm run lint
+      
+    - name: Run tests
+      working-directory: ./sdk/typescript
+      run: npm test -- --coverage
+
+  wallet-security:
+    name: Wallet Security
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: wallet/package-lock.json
+        
+    - name: Install dependencies
+      working-directory: ./wallet
+      run: npm ci
+      
+    - name: Install Rust for Tauri
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        
+    - name: Run frontend security audit
+      working-directory: ./wallet
+      run: npm audit --audit-level moderate
+      
+    - name: Run frontend linting
+      working-directory: ./wallet
+      run: npm run lint
+      
+    - name: Run Rust backend security checks
+      working-directory: ./wallet/src-tauri
+      run: |
+        cargo install cargo-audit cargo-deny
+        cargo audit --deny-warnings
+        cargo deny check
+        cargo clippy -- -D warnings

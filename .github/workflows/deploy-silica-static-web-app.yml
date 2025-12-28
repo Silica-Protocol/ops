@@ -1,0 +1,59 @@
+name: Deploy Silica Static Web App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/silica/**"
+      - ".github/workflows/deploy-silica-static-web-app.yml"
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - "website/silica/**"
+      - ".github/workflows/deploy-silica-static-web-app.yml"
+
+jobs:
+  build_and_deploy:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: "**/package-lock.json"
+
+      - name: Install
+        working-directory: website/silica
+        run: npm ci
+
+      - name: Build
+        working-directory: website/silica
+        run: npm run build
+
+      - name: Deploy (Azure Static Web Apps)
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_SILICA }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: website/silica
+          api_location: ""
+          app_artifact_location: dist
+
+  close_pull_request:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Close PR Environment
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_SILICA }}
+          app_location: website/silica
+          action: close
