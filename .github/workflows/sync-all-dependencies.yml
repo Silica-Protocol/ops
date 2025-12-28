@@ -41,12 +41,12 @@ jobs:
 
     steps:
       - name: Checkout ops
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: ops
 
       - name: Checkout target repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: Silica-Protocol/${{ matrix.repo }}
           path: target
@@ -67,7 +67,7 @@ jobs:
 
       - name: Create PR
         if: env.DRY_RUN == 'false'
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@v8
         with:
           path: target
           token: ${{ secrets.REPO_ADMIN_TOKEN }}
@@ -101,19 +101,19 @@ jobs:
 
     steps:
       - name: Checkout ops
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: ops
 
       - name: Checkout target repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: Silica-Protocol/${{ matrix.repo }}
           path: target
           token: ${{ secrets.REPO_ADMIN_TOKEN }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '18'
 
@@ -133,7 +133,7 @@ jobs:
 
       - name: Create PR
         if: env.DRY_RUN == 'false'
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@v8
         with:
           path: target
           token: ${{ secrets.REPO_ADMIN_TOKEN }}
